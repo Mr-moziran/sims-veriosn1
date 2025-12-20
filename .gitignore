@@ -1,0 +1,18 @@
+# build artifacts
+out/
+target/
+*.war
+
+# IDE
+.idea/
+*.iml
+
+# local files
+hello.txt
+
+# local secrets / config (DO NOT COMMIT)
+src/druid.properties
+
+# uploads (if exists)
+web/upload/
+upload/
