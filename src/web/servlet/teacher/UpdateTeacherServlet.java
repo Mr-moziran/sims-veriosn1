@@ -22,7 +22,8 @@ public class UpdateTeacherServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         request.setCharacterEncoding("utf-8");
         HttpSession session = request.getSession();
-        String teacherid = request.getParameter("tid");
+
+        String teacherid = (String)request.getAttribute("tid");
 
         Teacher teacher = new Teacher();
         teacher.setT_id(teacherid);

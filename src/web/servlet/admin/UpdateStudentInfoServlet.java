@@ -26,6 +26,7 @@ public class UpdateStudentInfoServlet extends HttpServlet {
 
         request.setCharacterEncoding("utf-8");
 //        HttpSession session = request.getSession();
+
         String sid = request.getParameter("student-id");
         System.out.println("sid:"+sid);
 
@@ -49,7 +50,12 @@ public class UpdateStudentInfoServlet extends HttpServlet {
         //判断输入位数是否大于数据库位数
         if (name.length() > 4 || phone.length() > 11 || email.length()>24 || address.length() > 24 || age.length()>2 || name.contains("<") || phone.contains("<") || email.contains("<") || address.contains("<") || age.contains("<")) {
             request.setAttribute("update_msg","格式错误，请重新提交！"+String.format("%tT",new Date()));
-            request.getRequestDispatcher("updateStudentServlet?sid="+sid).forward(request, response);
+
+            // 1. 把 ID 塞进背包
+            request.setAttribute("sid", sid);
+            // 2. 路径写死，不带问号
+            request.getRequestDispatcher("updateStudentServlet").forward(request, response);
+
         }else {
             //封装学生对象
             updateStudent.setS_id(sid);
@@ -69,7 +75,11 @@ public class UpdateStudentInfoServlet extends HttpServlet {
 
             //成功则返回并给提示
             request.setAttribute("update_msg", "修改成功！"+String.format("%tT",new Date()));
-            request.getRequestDispatcher("updateStudentServlet?sid="+sid).forward(request, response);
+
+            // 1. 把 ID 塞进背包
+            request.setAttribute("sid", sid);
+            // 2. 路径写死，去掉 ?sid=...
+            request.getRequestDispatcher("updateStudentServlet").forward(request, response);
         }
     }
 

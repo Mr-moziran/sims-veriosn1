@@ -18,6 +18,7 @@ import java.util.Date;
 public class UpdateTeacherInfoServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         request.setCharacterEncoding("utf-8");
+
         String tid = request.getParameter("teacher-id");
 
         String name = request.getParameter("teacher-name");
@@ -29,7 +30,11 @@ public class UpdateTeacherInfoServlet extends HttpServlet {
         //判断输入位数是否大于数据库位数
         if (name.length() > 4 || education.length() > 20 || title.length()>24 || name.contains("<") || education.contains("<") || title.contains("<")) {
             request.setAttribute("update_msg","格式错误，请重新提交！"+String.format("%tT",new Date()));
-            request.getRequestDispatcher("updateTeacherServlet?tid="+tid).forward(request, response);
+
+            // 【修改点 1】：装包 + 死路径
+            request.setAttribute("tid", tid);
+            request.getRequestDispatcher("updateTeacherServlet").forward(request, response);
+
         }else {
             //封装教师对象
             updateTeacher.setT_id(tid);
@@ -44,8 +49,10 @@ public class UpdateTeacherInfoServlet extends HttpServlet {
 
             //成功则返回并给提示
             request.setAttribute("update_msg", "修改成功！" + String.format("%tT", new Date()));
-            request.getRequestDispatcher("updateTeacherServlet?tid=" + tid).forward(request, response);
-        }
+
+            // 【修改点 2】：装包 + 死路径
+            request.setAttribute("tid", tid);
+            request.getRequestDispatcher("updateTeacherServlet").forward(request, response);        }
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

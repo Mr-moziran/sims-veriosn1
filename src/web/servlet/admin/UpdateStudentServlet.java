@@ -21,7 +21,8 @@ public class UpdateStudentServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         request.setCharacterEncoding("utf-8");
         HttpSession session = request.getSession();
-        String studentid = request.getParameter("sid");
+
+        String studentid = (String) request.getAttribute("sid");
 //        session.setAttribute("sid",studentid);
 
         Student student = new Student();

@@ -37,10 +37,27 @@ public class ShowPhotoServlet extends HttpServlet {
 
         String imagePath;
         if (p == null) {
-            imagePath = getServletContext().getRealPath("/photos/") + "0.jpg";
+            imagePath =  "0.jpg";
         } else {
-            imagePath = getServletContext().getRealPath("/photos/") + p.getPhotoName();
+            imagePath =  p.getPhotoName();
         }
+
+        // 定义图片存放的基础目录
+        File photoDir = new File(getServletContext().getRealPath("/photos/"));
+
+        // 构造图片文件对象
+        File requestedFile = new File(photoDir, imagePath);
+
+        // 获取文件的规范路径
+        String canonicalPhotoDir = photoDir.getCanonicalPath();
+        String canonicalFile = requestedFile.getCanonicalPath();
+
+        // 确保请求的文件路径在 /photos/ 目录下
+        if (!canonicalFile.startsWith(canonicalPhotoDir)) {
+            // 如果文件路径不在预期的 /photos/ 目录下，抛出异常，防止路径穿越
+            throw new SecurityException("非法的文件访问尝试！");
+        }
+
 
         response.reset();
 
@@ -57,7 +74,7 @@ public class ShowPhotoServlet extends HttpServlet {
         }
 
         // 直接把文件流写到响应输出流
-        try (InputStream in = new FileInputStream(imagePath);
+        try (InputStream in = new FileInputStream(requestedFile);
              OutputStream out = response.getOutputStream()) {
 
             byte[] buf = new byte[8192];

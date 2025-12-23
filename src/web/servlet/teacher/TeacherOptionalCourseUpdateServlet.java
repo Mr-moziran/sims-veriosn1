@@ -30,8 +30,12 @@ public class TeacherOptionalCourseUpdateServlet extends HttpServlet {
         //判断输入位数是否大于数据库位数
         if (cid.contains("<") || name.contains("<") || info.contains("<")) {
             request.setAttribute("update_msg","格式错误，请重新提交！"+String.format("%tT",new Date()));
-            request.getRequestDispatcher("updateTeacherOptionalCourseServlet?cid="+cid).forward(request, response);
-        }else {
+
+            // 【修改点 1】：失败时，把 cid 放入背包，路径写死
+            request.setAttribute("cid", cid);
+            request.getRequestDispatcher("updateTeacherOptionalCourseServlet").forward(request, response);
+
+        } else {
             //封装学生对象
             updateCourse.setC_id(cid);
             updateCourse.setC_name(name);
@@ -43,8 +47,10 @@ public class TeacherOptionalCourseUpdateServlet extends HttpServlet {
 
             //成功则返回并给提示
             request.setAttribute("update_msg", "修改成功！"+String.format("%tT",new Date()));
-            request.getRequestDispatcher("updateTeacherOptionalCourseServlet?cid="+cid).forward(request, response);
-        }
+
+            // 【修改点 2】：成功时，把 cid 放入背包，路径写死
+            request.setAttribute("cid", cid);
+            request.getRequestDispatcher("updateTeacherOptionalCourseServlet").forward(request, response);        }
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

@@ -138,6 +138,16 @@ public class StudentDaoImpl implements StudentDao {
 
     @Override
     public int findTotalCount(Map<String, String[]> condition) {
+        // 定义允许的字段名白名单
+        Map<String, String> ALLOWED_FIELDS = Map.of(
+                "s_id", "s_id",
+                "s_name", "s_name",
+                "s_college", "s_college",
+                "s_department", "s_department",
+                "s_class", "s_class"
+                // 可以继续增加允许的字段
+        );
+
         //定义模板初始化sql
         String sql = "select count(*) from student where 1=1";
         StringBuilder sb = new StringBuilder(sql);
@@ -152,12 +162,18 @@ public class StudentDaoImpl implements StudentDao {
                 continue;
             }
 
+            // 确保 key 在白名单中
+            String column = ALLOWED_FIELDS.get(key);
+            if (column == null) {
+                continue; // 如果不在白名单中，则跳过
+            }
+
             //获取value
             String value = condition.get(key)[0];
             //判断value是否有值
             if (value != null && !"".equals(value)) {
                 //有值
-                sb.append(" and "+key+" like ? ");
+                sb.append(" and ").append(column).append(" like ? ");
                 params.add("%"+value+"%");//?条件的值
             }
         }
