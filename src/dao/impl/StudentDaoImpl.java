@@ -138,49 +138,60 @@ public class StudentDaoImpl implements StudentDao {
 
     @Override
     public int findTotalCount(Map<String, String[]> condition) {
-        // 定义允许的字段名白名单
-        Map<String, String> ALLOWED_FIELDS = Map.of(
-                "s_id", "s_id",
-                "s_name", "s_name",
-                "s_college", "s_college",
-                "s_department", "s_department",
-                "s_class", "s_class"
-                // 可以继续增加允许的字段
-        );
-
-        //定义模板初始化sql
+        // 定义模板初始化sql
         String sql = "select count(*) from student where 1=1";
         StringBuilder sb = new StringBuilder(sql);
-        //遍历map
+        // 定义参数集合
+        List<Object> params = new ArrayList<>();
+        // 遍历map
         Set<String> keySet = condition.keySet();
-        //定义参数集合
-        List<Object> params = new ArrayList<Object>();
         for (String key : keySet) {
-            System.out.println(key);
-            //排除分页条件参数
+            // 排除分页参数
             if ("currentPage".equals(key) || "rows".equals(key)) {
                 continue;
             }
 
-            // 确保 key 在白名单中
-            String column = ALLOWED_FIELDS.get(key);
-            if (column == null) {
-                continue; // 如果不在白名单中，则跳过
-            }
-
-            //获取value
             String value = condition.get(key)[0];
-            //判断value是否有值
-            if (value != null && !"".equals(value)) {
-                //有值
-                sb.append(" and ").append(column).append(" like ? ");
-                params.add("%"+value+"%");//?条件的值
+            // 确保值不为空
+            if (value != null && !value.isEmpty()) {
+
+                // 【核心修改点】
+                // 直接判断 key，然后 append "死字符串"。
+
+                switch (key) {
+                    case "s_name":
+                        sb.append(" and s_name like ? ");
+                        params.add("%" + value + "%");
+                        break;
+                    case "s_college":
+                        sb.append(" and s_college like ? ");
+                        params.add("%" + value + "%");
+                        break;
+                    case "s_department":
+                        sb.append(" and s_department like ? ");
+                        params.add("%" + value + "%");
+                        break;
+                    case "s_class":
+                        sb.append(" and s_class like ? ");
+                        params.add("%" + value + "%");
+                        break;
+                    case "s_id":
+                        // 如果也是模糊查询就用 like
+                        sb.append(" and s_id like ? ");
+                        params.add("%" + value + "%");
+                        break;
+                    default:
+                        // 对于不认识的 key，什么都不做，直接忽略
+                        break;
+                }
             }
         }
+
         System.out.println(sb.toString());
         System.out.println(params);
-        return template.queryForObject(sb.toString(),Integer.class,params.toArray());
+        return template.queryForObject(sb.toString(), Integer.class, params.toArray());
     }
+
 
     @Override
     public void addStudentAllInfo(Student s) {
