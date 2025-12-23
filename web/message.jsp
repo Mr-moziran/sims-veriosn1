@@ -3,9 +3,12 @@
 <%@ page import="java.nio.charset.StandardCharsets" %>
 <%@ page import="java.nio.file.*" %>
 <%@ page import="java.util.UUID" %>
+<%@ page import="java.util.Set" %>
+<%@ page import="java.util.HashSet" %>
+<%@ page import="java.util.Arrays" %>
 
 <%!
-    // HTML 转义：防 XSS
+    // HTML 转义：防反射型 XSS (保持原样，这部分不仅没问题，而且是必须的)
     private static String escapeHtml(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;")
@@ -23,11 +26,20 @@
         return name.substring(dot + 1).toLowerCase();
     }
 
-    // 禁止危险扩展名（按需扩展）
-    private static boolean isForbiddenExt(String name) {
-        String lower = name == null ? "" : name.toLowerCase();
-        return lower.endsWith(".jsp") || lower.endsWith(".jspx") || lower.endsWith(".jspf")
-                || lower.endsWith(".php") || lower.endsWith(".asp") || lower.endsWith(".aspx");
+    // [安全修复] 关键修改：改用“白名单”策略
+    // 只有在列表里的后缀才允许上传。这彻底防御了 .html/.svg (XSS) 和 .jsp/.php (RCE)。
+    private static boolean isAllowedExt(String name) {
+        if (name == null) return false;
+        String ext = extLower(name);
+
+        // 定义允许的后缀列表 (根据你的业务需求增减)
+        Set<String> allowList = new HashSet<>(Arrays.asList(
+                "jpg", "jpeg", "png", "gif", "bmp", "webp", // 图片
+                "pdf", "txt"                                // 文档
+                // 注意：绝对不要加 "html", "htm", "svg", "xml"
+        ));
+
+        return allowList.contains(ext);
     }
 
     // 把文件名清理成“安全可用”的名字：保留字母/数字/._-，其他替换为 _
@@ -55,7 +67,7 @@
         return;
     }
 
-    // ===== 2) 限制大小（别给 10GB，那会被 DoS/OOM）=====
+    // ===== 2) 限制大小 =====
     final int MAX_SIZE = 10 * 1024 * 1024; // 10MB
     int formDataLength = request.getContentLength();
     if (formDataLength < 0) {
@@ -67,7 +79,7 @@
         return;
     }
 
-    // ===== 3) 读完整个请求体到 byte[]（修复你原来 read 的 len 参数 bug）=====
+    // ===== 3) 读完整个请求体 =====
     byte[] dataBytes = new byte[formDataLength];
     try (DataInputStream in = new DataInputStream(request.getInputStream())) {
         int total = 0;
@@ -82,8 +94,7 @@
         }
     }
 
-    // ===== 4) 解析 multipart：用 ISO_8859_1（保证字符位置≈字节位置）=====
-    // 原来用 UTF-8 会导致二进制内容解析错位，这里改成 ISO_8859_1 更适合“按下标切片”
+    // ===== 4) 解析 multipart =====
     String body = new String(dataBytes, StandardCharsets.ISO_8859_1);
 
     // 4.1 取 boundary
@@ -91,7 +102,6 @@
     int bIdx = contentType.indexOf("boundary=");
     if (bIdx >= 0) {
         boundary = contentType.substring(bIdx + "boundary=".length()).trim();
-        // 可能带引号
         if (boundary.startsWith("\"") && boundary.endsWith("\"") && boundary.length() >= 2) {
             boundary = boundary.substring(1, boundary.length() - 1);
         }
@@ -114,10 +124,10 @@
         return;
     }
 
-    String rawFileName = body.substring(fnStart, fnEnd); // 用户可控（不可信）
+    String rawFileName = body.substring(fnStart, fnEnd);
 
-    // ===== 5) 关键修复 1：只取 basename（去掉任何路径部分）=====
-    // 同时兼容 \ 和 /
+    // ===== 5) 文件名处理 =====
+    // 只取 basename
     int lastSlash = Math.max(rawFileName.lastIndexOf('/'), rawFileName.lastIndexOf('\\'));
     String baseName = (lastSlash >= 0) ? rawFileName.substring(lastSlash + 1) : rawFileName;
     baseName = baseName.replace("\r", "").replace("\n", "").trim();
@@ -127,49 +137,39 @@
         return;
     }
 
-    // 禁止危险扩展名（防上传 jsp/webshell）
-    if (isForbiddenExt(baseName)) {
-        out.print("禁止上传该类型文件：" + escapeHtml(baseName));
+    // [安全修复] 这里不再调用 isForbiddenExt，而是调用 isAllowedExt
+    if (!isAllowedExt(baseName)) {
+        // 这一步拦截了所有非白名单后缀（包括 .html）
+        out.print("不支持的文件类型，仅允许上传图片、PDF或TXT文件。<br/>文件名：" + escapeHtml(baseName));
         return;
     }
 
-    // 文件名清理（避免奇怪字符/控制符）
+    // 文件名清理
     String safeBaseName = sanitizeFileName(baseName);
 
-    // 也可以加白名单扩展名（示例：只允许图片/pdf/txt）
-    // String ext = extLower(safeBaseName);
-    // if (!java.util.Set.of("png","jpg","jpeg","gif","pdf","txt").contains(ext)) { ... }
-
-    // ===== 6) 生成服务端文件名（避免覆盖 + 不让用户决定磁盘路径）=====
-    // 保留原扩展名更友好
+    // ===== 6) 生成服务端文件名 =====
     String ext = extLower(safeBaseName);
-    String serverName = (ext.isEmpty())
-            ? (UUID.randomUUID().toString() + "-" + safeBaseName)
-            : (UUID.randomUUID().toString() + "-" + safeBaseName);
+    // 使用 UUID 避免覆盖
+    String serverName = UUID.randomUUID().toString() + (ext.isEmpty() ? "" : "." + ext);
 
-    // ===== 7) 上传目录：继续用 webapp 下的 /upload=====
+    // ===== 7) 上传目录 =====
     String uploadReal = application.getRealPath("/upload");
     if (uploadReal == null) {
-        out.print("无法定位 upload 目录（getRealPath 返回 null）");
+        out.print("无法定位 upload 目录");
         return;
     }
     Path baseDir = Paths.get(uploadReal).toAbsolutePath().normalize();
     Files.createDirectories(baseDir);
     baseDir = baseDir.toRealPath();
 
-    // ===== 8) 关键修复 2：路径沙箱（CWE-23 核心）=====
+    // ===== 8) 路径沙箱 check (CWE-23) =====
     Path target = baseDir.resolve(serverName).normalize();
     if (!target.startsWith(baseDir)) {
         out.print("非法路径，拒绝上传");
         return;
     }
-    if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-        out.print("<p>文件已存在（重名概率极低）： " + escapeHtml(serverName) + "</p>");
-        return;
-    }
 
-    // ===== 9) 计算文件内容起止位置 =====
-    // header 结束是空行：\r\n\r\n（或 \n\n）
+    // ===== 9) 计算内容起止位置 =====
     int headerEnd = body.indexOf("\r\n\r\n", fnEnd);
     int headerLen = 4;
     if (headerEnd < 0) {
@@ -182,11 +182,9 @@
     }
     int startPos = headerEnd + headerLen;
 
-    // 文件内容结束：在下一个 boundary 前（通常是 \r\n--boundary）
     String boundaryMarker = "\r\n--" + boundary;
     int boundaryPos = body.indexOf(boundaryMarker, startPos);
     if (boundaryPos < 0) {
-        // 兼容只用 \n 的情况
         boundaryMarker = "\n--" + boundary;
         boundaryPos = body.indexOf(boundaryMarker, startPos);
     }
@@ -201,17 +199,17 @@
         return;
     }
 
-    // ===== 10) 写文件（流式输出到磁盘；CREATE_NEW 防止覆盖）=====
+    // ===== 10) 写文件 =====
     try (OutputStream os = Files.newOutputStream(target, StandardOpenOption.CREATE_NEW)) {
         os.write(dataBytes, startPos, endPos - startPos);
     }
 
-    // ===== 11) 关键修复 3：输出转义（CWE-79 XSS 核心）=====
-    out.print("<b>文件上传成功</b><br/>原始文件名："
-            + escapeHtml(baseName)
-            + "<br/>保存文件名："
-            + escapeHtml(serverName));
-
+    // ===== 11) 输出结果 (输出编码 CWE-79) =====
+    // 即使这里有 escapeHtml，如果允许上传 html 文件，用户访问文件链接时仍会触发 XSS。
+    // 但现在我们加上了白名单限制，所以这里是安全的。
+    out.print("<b>文件上传成功</b><br/>");
+    out.print("原始文件名：" + escapeHtml(baseName) + "<br/>");
+    out.print("保存文件名：" + escapeHtml(serverName));
 %>
 </body>
 </html>
