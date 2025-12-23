@@ -138,60 +138,49 @@ public class StudentDaoImpl implements StudentDao {
 
     @Override
     public int findTotalCount(Map<String, String[]> condition) {
-        // 定义模板初始化sql
+        // 定义允许的字段名白名单
+        Map<String, String> ALLOWED_FIELDS = Map.of(
+                "s_id", "s_id",
+                "s_name", "s_name",
+                "s_college", "s_college",
+                "s_department", "s_department",
+                "s_class", "s_class"
+                // 可以继续增加允许的字段
+        );
+
+        //定义模板初始化sql
         String sql = "select count(*) from student where 1=1";
         StringBuilder sb = new StringBuilder(sql);
-        // 定义参数集合
-        List<Object> params = new ArrayList<>();
-        // 遍历map
+        //遍历map
         Set<String> keySet = condition.keySet();
+        //定义参数集合
+        List<Object> params = new ArrayList<Object>();
         for (String key : keySet) {
-            // 排除分页参数
+            System.out.println(key);
+            //排除分页条件参数
             if ("currentPage".equals(key) || "rows".equals(key)) {
                 continue;
             }
 
+            // 确保 key 在白名单中
+            String column = ALLOWED_FIELDS.get(key);
+            if (column == null) {
+                continue; // 如果不在白名单中，则跳过
+            }
+
+            //获取value
             String value = condition.get(key)[0];
-            // 确保值不为空
-            if (value != null && !value.isEmpty()) {
-
-                // 【核心修改点】
-                // 直接判断 key，然后 append "死字符串"。
-
-                switch (key) {
-                    case "s_name":
-                        sb.append(" and s_name like ? ");
-                        params.add("%" + value + "%");
-                        break;
-                    case "s_college":
-                        sb.append(" and s_college like ? ");
-                        params.add("%" + value + "%");
-                        break;
-                    case "s_department":
-                        sb.append(" and s_department like ? ");
-                        params.add("%" + value + "%");
-                        break;
-                    case "s_class":
-                        sb.append(" and s_class like ? ");
-                        params.add("%" + value + "%");
-                        break;
-                    case "s_id":
-                        // 如果也是模糊查询就用 like
-                        sb.append(" and s_id like ? ");
-                        params.add("%" + value + "%");
-                        break;
-                    default:
-                        // 对于不认识的 key，什么都不做，直接忽略
-                        break;
-                }
+            //判断value是否有值
+            if (value != null && !"".equals(value)) {
+                //有值
+                sb.append(" and ").append(column).append(" like ? ");
+                params.add("%"+value+"%");//?条件的值
             }
         }
-
         System.out.println(sb.toString());
         System.out.println(params);
-        return template.queryForObject(sb.toString(), Integer.class, params.toArray());
+        return template.queryForObject(sb.toString(),Integer.class,params.toArray());
     }
-
 
     @Override
     public void addStudentAllInfo(Student s) {
@@ -223,38 +212,56 @@ public class StudentDaoImpl implements StudentDao {
     @Override
     public List<Student> findByPage(int start, int rows, Map<String, String[]> condition) {
         try {
+            // 定义允许的字段名白名单（和 findTotalCount 保持一致）
+            Map<String, String> ALLOWED_FIELDS = Map.of(
+                    "s_id", "s_id",
+                    "s_name", "s_name",
+                    "s_college", "s_college",
+                    "s_department", "s_department",
+                    "s_class", "s_class"
+            );
+
             String sql = "select * from student where 1=1";
             StringBuilder sb = new StringBuilder(sql);
-            //遍历map
+
             Set<String> keySet = condition.keySet();
-            //定义参数集合
             List<Object> params = new ArrayList<Object>();
+
             for (String key : keySet) {
-                //排除分页条件参数
+                // 排除分页条件参数
                 if ("currentPage".equals(key) || "rows".equals(key)) {
                     continue;
                 }
 
-                //获取value
-                String value = condition.get(key)[0];
-                //判断value是否有值
+                // 白名单校验：不在允许列表里的字段，直接跳过
+                String column = ALLOWED_FIELDS.get(key);
+                if (column == null) {
+                    continue;
+                }
+
+                // 获取 value（加一点健壮性，避免 NPE/越界）
+                String[] arr = condition.get(key);
+                String value = (arr != null && arr.length > 0) ? arr[0] : null;
+
                 if (value != null && !"".equals(value)) {
-                    //有值
-                    sb.append(" and "+key+" like ? ");
-                    params.add("%"+value+"%");//?条件的值
+                    sb.append(" and ").append(column).append(" like ? ");
+                    params.add("%" + value + "%");
                 }
             }
-            //添加分页查询
+
+            // 添加分页查询
             sb.append(" limit ? , ?");
-            //添加分页查询参数值
             params.add(start);
             params.add(rows);
+
             System.out.println(sb.toString());
             System.out.println(params);
-            return template.query(sb.toString(),new BeanPropertyRowMapper<Student>(Student.class),params.toArray());
+
+            return template.query(sb.toString(), new BeanPropertyRowMapper<Student>(Student.class), params.toArray());
         } catch (DataAccessException e) {
             e.printStackTrace();
             return null;
         }
     }
+
 }
